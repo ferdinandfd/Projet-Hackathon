@@ -1,110 +1,88 @@
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
 
-# -------------------------------
-# 1️⃣ Charger et préparer le CSV
-# -------------------------------
-df = pd.read_csv("train.csv")  # ton CSV brut
+# -------------------------
+# Charger les CSV
+# -------------------------
+df_train = pd.read_csv("waiting_times_train_preprocessed.csv")
+df_val = pd.read_csv("waiting_times_X_test_val_preprocessed.csv")
 
-# Colonnes représentant des temps vers des événements
-event_cols = ['TIME_TO_PARADE_1', 'TIME_TO_PARADE_2', 'TIME_TO_NIGHT_SHOW']
+# -------------------------
+# Définir features globales et locales
+# -------------------------
+global_features = [
+    'year', 'month', 'day', 'day_of_week', 'is_weekend',
+    'is_there_parade_1', 'is_there_parade_2', 'is_there_night_show'
+]
 
-# Remplacer les valeurs vides par np.inf pour les événements
-for col in event_cols:
-    df[col] = df[col].replace(0, np.nan)  # si 0 déjà présent
-    df[col] = df[col].fillna(np.inf)
+local_features = [
+    'ADJUST_CAPACITY', 'DOWNTIME',
+    'TIME_TO_PARADE_1', 'TIME_TO_PARADE_2', 'TIME_TO_NIGHT_SHOW',
+    'hour', 'minute', 'second',
+    'hour_sin', 'hour_cos', 'minute_sin', 'minute_cos',
+    'day_of_week_sin', 'day_of_week_cos', 'month_sin', 'month_cos'
+]
 
-# Colonnes numériques restantes à remplir avec 0
-numeric_cols = ['ADJUST_CAPACITY', 'DOWNTIME', 'CURRENT_WAIT_TIME']
-df[numeric_cols] = df[numeric_cols].fillna(0)
+# Ajouter toutes les colonnes one-hot des attractions
+attraction_cols = [c for c in df_train.columns if c.startswith('ENTITY_DESCRIPTION_SHORT_')]
+local_features += attraction_cols
 
-# Convertir la colonne datetime
-df['DATETIME'] = pd.to_datetime(df['DATETIME'])
+# Target
+target = 'CURRENT_WAIT_TIME'
 
-# Features temporelles de base
-df['year'] = df['DATETIME'].dt.year
-df['month'] = df['DATETIME'].dt.month
-df['day'] = df['DATETIME'].dt.day
-df['hour'] = df['DATETIME'].dt.hour
-df['minute'] = df['DATETIME'].dt.minute
-df['second'] = df['DATETIME'].dt.second
-df['day_of_week'] = df['DATETIME'].dt.weekday
-df['is_weekend'] = df['day_of_week'].isin([5,6]).astype(int)
+# -------------------------
+# Préparer X et y
+# -------------------------
+X_train_global = df_train[global_features]
+X_train_local = df_train[local_features]
+y_train = df_train[target]
 
-# Features cycliques
-df['hour_sin'] = np.sin(2*np.pi*df['hour']/24)
-df['hour_cos'] = np.cos(2*np.pi*df['hour']/24)
-df['minute_sin'] = np.sin(2*np.pi*df['minute']/60)
-df['minute_cos'] = np.cos(2*np.pi*df['minute']/60)
-df['day_of_week_sin'] = np.sin(2*np.pi*df['day_of_week']/7)
-df['day_of_week_cos'] = np.cos(2*np.pi*df['day_of_week']/7)
-df['month_sin'] = np.sin(2*np.pi*df['month']/12)
-df['month_cos'] = np.cos(2*np.pi*df['month']/12)
+X_val_global = df_val[global_features]
+X_val_local = df_val[local_features]
+y_val = df_val[target]
 
-# One-hot encoding des catégories
-df = pd.get_dummies(df, columns=['ENTITY_DESCRIPTION_SHORT'], drop_first=True)
-
-# Supprimer DATETIME
-df = df.drop(columns=['DATETIME'])
-
-# -------------------------------
-# 2️⃣ Séparer features globales et locales
-# -------------------------------
-global_features = ['year', 'month', 'day_of_week', 'is_weekend',
-                   'month_sin', 'month_cos', 'day_of_week_sin', 'day_of_week_cos']
-
-local_features = ['hour', 'minute', 'hour_sin', 'hour_cos', 'minute_sin', 'minute_cos',
-                  'ADJUST_CAPACITY', 'DOWNTIME'] + event_cols
-
-# Ajouter colonnes one-hot comme locales
-local_features += [col for col in df.columns if col.startswith('ENTITY_DESCRIPTION_SHORT_')]
-
-# 3️⃣ Définir X et y
-X_global = df[global_features]
-X_local = df[local_features]
-y = df['CURRENT_WAIT_TIME']
-
-# 4️⃣ Train/test split
-Xg_train, Xg_test, Xl_train, Xl_test, y_train, y_test = train_test_split(
-    X_global, X_local, y, test_size=0.2, random_state=42
-)
-
-# -------------------------------
-# 5️⃣ Modèle global
-# -------------------------------
+# -------------------------
+# Entraîner les modèles sur tout le train
+# -------------------------
 model_global = LinearRegression()
-model_global.fit(Xg_train, y_train)
-
-y_global_train = model_global.predict(Xg_train)
-y_global_test = model_global.predict(Xg_test)
-
-# -------------------------------
-# 6️⃣ Modèle local combiné
-# -------------------------------
-Xl_train_combined = Xl_train.copy()
-Xl_train_combined['pred_global'] = y_global_train
-
-Xl_test_combined = Xl_test.copy()
-Xl_test_combined['pred_global'] = y_global_test
+model_global.fit(X_train_global, y_train)
 
 model_local = LinearRegression()
-model_local.fit(Xl_train_combined, y_train)
+model_local.fit(X_train_local, y_train)
 
-# -------------------------------
-# 7️⃣ Prédictions finales
-# -------------------------------
-y_pred = model_local.predict(Xl_test_combined)
+# -------------------------
+# Cross-validation interne pour ajuster la pondération
+# -------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+weights = np.linspace(0, 1, 21)
+best_weight = 0
+best_rmse_cv = float('inf')
 
-# -------------------------------
-# 8️⃣ Évaluation
-# -------------------------------
-mse = mean_squared_error(y_test, y_pred)
-rmse = np.sqrt(mse)
-r2 = r2_score(y_test, y_pred)
+for w in weights:
+    rmses = []
+    for train_idx, val_idx in kf.split(X_train_global):
+        # Split interne
+        X_tr_g, X_val_g = X_train_global.iloc[train_idx], X_train_global.iloc[val_idx]
+        X_tr_l, X_val_l = X_train_local.iloc[train_idx], X_train_local.iloc[val_idx]
+        y_tr, y_val_cv = y_train.iloc[train_idx], y_train.iloc[val_idx]
 
-print("MSE :", mse)
-print("RMSE :", rmse)
-print("R2 :", r2)
+        # Prédictions modèles déjà entraînés
+        y_pred_val = w * model_global.predict(X_val_g) + (1 - w) * model_local.predict(X_val_l)
+        rmses.append(np.sqrt(mean_squared_error(y_val_cv, y_pred_val)))
+    
+    mean_rmse = np.mean(rmses)
+    if mean_rmse < best_rmse_cv:
+        best_rmse_cv = mean_rmse
+        best_weight = w
+
+print(f"Meilleure pondération (CV sur train): {best_weight:.2f}, RMSE CV: {best_rmse_cv:.2f}")
+
+# -------------------------
+# Évaluation finale sur le set de validation
+# -------------------------
+y_pred_val_combined = best_weight * model_global.predict(X_val_global) + (1 - best_weight) * model_local.predict(X_val_local)
+rmse_final = np.sqrt(mean_squared_error(y_val, y_pred_val_combined))
+print(f"RMSE final sur validation: {rmse_final:.2f}")
