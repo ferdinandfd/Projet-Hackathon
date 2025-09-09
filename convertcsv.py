@@ -20,13 +20,10 @@ def preprocess_csv(file_path):
     event_cols = ['TIME_TO_PARADE_1', 'TIME_TO_PARADE_2', 'TIME_TO_NIGHT_SHOW']
     
     for col in event_cols:
-        df[col] = df[col].fillna(np.inf)
+        df[col] = df[col].fillna(np.inf) #pas de parade équivaut à temps infini avant prochaine parade
+
     
-    # Colonnes numériques restantes à remplir avec 0
-    numeric_cols = ['ADJUST_CAPACITY', 'DOWNTIME', 'CURRENT_WAIT_TIME']
-    df[numeric_cols] = df[numeric_cols].fillna(0)
-    
-    # Convertir datetime
+    # Convertir datetime si besoin
     df['DATETIME'] = pd.to_datetime(df['DATETIME'])
     
     # Features temporelles de base
@@ -36,10 +33,10 @@ def preprocess_csv(file_path):
     df['hour'] = df['DATETIME'].dt.hour
     df['minute'] = df['DATETIME'].dt.minute
     df['second'] = df['DATETIME'].dt.second
-    df['day_of_week'] = df['DATETIME'].dt.weekday
-    df['is_weekend'] = df['day_of_week'].isin([5,6]).astype(int)
+    df['day_of_week'] = df['DATETIME'].dt.weekday #jour de la semaine
+    df['is_weekend'] = df['day_of_week'].isin([5,6]).astype(int) #1 si week end, 0 sinon
     
-    # Features cycliques
+    #Features cycliques (pour continuité 23h/00h, 31/01 du mois, dec/janv)
     df['hour_sin'] = np.sin(2*np.pi*df['hour']/24)
     df['hour_cos'] = np.cos(2*np.pi*df['hour']/24)
     df['minute_sin'] = np.sin(2*np.pi*df['minute']/60)
@@ -49,7 +46,7 @@ def preprocess_csv(file_path):
     df['month_sin'] = np.sin(2*np.pi*df['month']/12)
     df['month_cos'] = np.cos(2*np.pi*df['month']/12)
     
-    # One-hot encoding
+    #One-hot encoding nom d'attraction
     df = pd.get_dummies(df, columns=['ENTITY_DESCRIPTION_SHORT'], drop_first=True)
     
     # Ajouter colonnes binaires is_there_*
@@ -72,7 +69,7 @@ def preprocess_csv(file_path):
     return df, save_path
 
 # -------------------------------
-# Transformer tes 2 fichiers
+# Transformer les 2 fichiers
 # -------------------------------
 df_train, path_train = preprocess_csv("waiting_times_train.csv")
 df_test, path_test = preprocess_csv("waiting_times_X_test_val.csv")
