@@ -20,7 +20,6 @@ def preprocess_csv(file_path):
     event_cols = ['TIME_TO_PARADE_1', 'TIME_TO_PARADE_2', 'TIME_TO_NIGHT_SHOW']
     
     for col in event_cols:
-        df[col] = df[col].replace(0, np.nan)
         df[col] = df[col].fillna(np.inf)
     
     # Colonnes numériques restantes à remplir avec 0
