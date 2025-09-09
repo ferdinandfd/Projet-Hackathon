@@ -1,4 +1,4 @@
 # Projet-Hackathon
-README groupe 4 yeaah
+README groupe 3 yeaah
 
 mot de passe : ocelot
