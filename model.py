@@ -10,8 +10,10 @@ df_main = pd.read_csv("waiting_times_train.csv")  #horaires
 df_meteo = pd.read_csv("weather_data.csv") #meteo
 X_val_main = pd.read_csv("waiting_times_X_test_val.csv") #validation
 
+
 #supprimer colonnes considérées inutiles ds meteo (par étude du tableau "à la main")
 df_meteo = df_meteo.drop(columns=['temp', 'dew_point', 'pressure','snow_1h'])
+
 
 #conversion en datetime pour pouvoir merge
 df_main["DATETIME"] = pd.to_datetime(df_main["DATETIME"])
@@ -64,7 +66,7 @@ def conversion_feature_tempo(df):
     df['month_sin'] = np.sin(2*np.pi*df['month']/12)
     df['month_cos'] = np.cos(2*np.pi*df['month']/12)
     df = df.drop(columns=['month', 'day', 'hour', 'minute', 'second', 'DATETIME'])
-    return df
+    return df #pas utile?
 
 df_train = conversion_feature_tempo(df_train)
 df_val = conversion_feature_tempo(df_val)
@@ -74,22 +76,49 @@ df_val = conversion_feature_tempo(df_val)
 df_train = pd.get_dummies(df_train, columns=['ENTITY_DESCRIPTION_SHORT'], drop_first=True)
 df_val = pd.get_dummies(df_val, columns=['ENTITY_DESCRIPTION_SHORT'], drop_first=True)
 
-#Définir X_train, Y_train, X_val
-features = df_train.columns.drop("WAIT_TIME_IN_2H")
-X_train = df_train[features]
-Y_train = df_train['WAIT_TIME_IN_2H']
-X_val = df_val
+
+#Définir X_train, Y_train, X_val pour chaque attraction
+df_train_wr = df_train[df_train["ENTITY_DESCRIPTION_SHORT_Water Ride"]==1] #water ride
+df_train_ps = df_train[df_train["ENTITY_DESCRIPTION_SHORT_Pirate Ship"]==1] #pirate ship
+df_train_fc = df_train[(df_train['ENTITY_DESCRIPTION_SHORT_Pirate Ship']==0) & (df_train['ENTITY_DESCRIPTION_SHORT_Water Ride']==0)] #flying coaster
+
+X_val_wr = df_val[df_val["ENTITY_DESCRIPTION_SHORT_Water Ride"]==1] #water ride
+X_val_ps = df_val[df_val['ENTITY_DESCRIPTION_SHORT_Pirate Ship']==1] #pirate ship
+X_val_fc = df_val[(df_val['ENTITY_DESCRIPTION_SHORT_Pirate Ship']==0) & (df_val['ENTITY_DESCRIPTION_SHORT_Water Ride']==0)]#flying coaster
+
+Y_train_wr = df_train_wr['WAIT_TIME_IN_2H']
+X_train_wr = df_train_wr.drop("WAIT_TIME_IN_2H")
+
+Y_train_ps = df_train_ps['WAIT_TIME_IN_2H']
+X_train_ps = df_train_ps.drop("WAIT_TIME_IN_2H")
+
+Y_train_fc = df_train_fc['WAIT_TIME_IN_2H']
+X_train_fc = df_train_fc.drop("WAIT_TIME_IN_2H")
 
 
-##MODELE
-model = LinearRegression()
-model.fit(X_train, Y_train)
 
-Y_val_pred = model.predict(X_val)
+##MODELES
+model_wr = LinearRegression()
+model_ps = LinearRegression()
+model_fc = LinearRegression()
+
+model_wr.fit(X_train_wr, Y_train_wr)
+model_ps.fit(X_train_ps, Y_train_ps)
+model_fc.fit(X_train_fc, Y_train_fc)
+
+Y_pred_wr = model_wr.predict(X_val_wr)
+Y_pred_ps = model_ps.predict(X_val_ps)
+Y_pred_fc = model_fc.predict(X_val_fc)
+
 
 #Rendu
+
 df_result = df_val_attrac_dt.copy()
-df_result["y_pred"] = Y_val_pred
+df_ypred = pd.concat(Y_pred_wr, Y_pred_ps, Y_pred_fc)
+df_ypred = df_ypred.sort_values('index')  # remet dans l'ordre original
+df_result["y_pred"] = df_ypred
 df_result["KEY"] = "Validation"
 
-df_result.to_csv("C:/Users/Utilisateur/Documents/MyGitDirectory/Projet-Hackathon/y_pred_linear.csv", index=False, encoding="utf-8")
+df_val.to_csv("C:/Users/Utilisateur/Documents/MyGitDirectory/Projet-Hackathon/xval_preproc.csv", index=False, encoding="utf-8")
+
+#df_result.to_csv("C:/Users/Utilisateur/Documents/MyGitDirectory/Projet-Hackathon/y_linear_par_attract.csv", index=False, encoding="utf-8")

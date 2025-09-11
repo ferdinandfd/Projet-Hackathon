@@ -45,69 +45,76 @@ for col in event_cols:
     df_val[col] = df_val[col].fillna(100000)
 
 
-#Features temporelles: détail
-def conversion_feature_tempo(df):
-    df['year'] = df['DATETIME'].dt.year
-    df['month'] = df['DATETIME'].dt.month
-    df['day'] = df['DATETIME'].dt.day
-    df['hour'] = df['DATETIME'].dt.hour
-    df['minute'] = df['DATETIME'].dt.minute
-    df['second'] = df['DATETIME'].dt.second
-    df['day_of_week'] = df['DATETIME'].dt.weekday
-    df['is_weekend'] = df['day_of_week'].isin([5,6]).astype(int)
-    return df
+df_train['year'] = df_train['DATETIME'].dt.year
+df_train['month'] = df_train['DATETIME'].dt.month
+df_train['day'] = df_train['DATETIME'].dt.day
+df_train['hour'] = df_train['DATETIME'].dt.hour
+df_train['minute'] = df_train['DATETIME'].dt.minute
+df_train['second'] = df_train['DATETIME'].dt.second
+df_train['day_of_week'] = df_train['DATETIME'].dt.weekday
+df_train['is_weekend'] = df_train['day_of_week'].isin([5,6]).astype(int)
 
-df_train = conversion_feature_tempo(df_train)
-df_val = conversion_feature_tempo(df_val)
+# Pour df_val
+df_val['year'] = df_val['DATETIME'].dt.year
+df_val['month'] = df_val['DATETIME'].dt.month
+df_val['day'] = df_val['DATETIME'].dt.day
+df_val['hour'] = df_val['DATETIME'].dt.hour
+df_val['minute'] = df_val['DATETIME'].dt.minute
+df_val['second'] = df_val['DATETIME'].dt.second
+df_val['day_of_week'] = df_val['DATETIME'].dt.weekday
+df_val['is_weekend'] = df_val['day_of_week'].isin([5,6]).astype(int)
 
 
 #One-hot encoding des noms d'attraction
 df_train = pd.get_dummies(df_train, columns=['ENTITY_DESCRIPTION_SHORT'], drop_first=True)
 df_val = pd.get_dummies(df_val, columns=['ENTITY_DESCRIPTION_SHORT'], drop_first=True)
 
-""""
-#Définir X_train, Y_train, X_val pour chaque attraction
-df_train_wr = df_train[df_train["ENTITY_DESCRIPTION_SHORT_Water Ride"]==1] #water ride
-df_train_ps = df_train[df_train["ENTITY_DESCRIPTION_SHORT_Pirate Ship"]==1] #pirate ship
-df_train_fc = df_train[(df_train['ENTITY_DESCRIPTION_SHORT_Pirate Ship']==0) & (df_train['ENTITY_DESCRIPTION_SHORT_Water Ride']==0)] #flying coaster
 
-X_val_wr = df_val[df_val["ENTITY_DESCRIPTION_SHORT_Water Ride"]==1] #water ride
-X_val_ps = df_val[df_val['ENTITY_DESCRIPTION_SHORT_Pirate Ship']==1] #pirate ship
-X_val_fc = df_val[(df_val['ENTITY_DESCRIPTION_SHORT_Pirate Ship']==0) & (df_val['ENTITY_DESCRIPTION_SHORT_Water Ride']==0)]#flying coaster
 
-Y_train_wr = df_train_wr['WAIT_TIME_IN_2H']
-X_train_wr = df_train_wr.drop("WAIT_TIME_IN_2H")
+##GRAPHIQUES----------------------------------------------------------------------------------
 
-Y_train_ps = df_train_ps['WAIT_TIME_IN_2H']
-X_train_ps = df_train_ps.drop("WAIT_TIME_IN_2H")
+import matplotlib.pyplot as plt
 
-Y_train_fc = df_train_fc['WAIT_TIME_IN_2H']
-X_train_fc = df_train_fc.drop("WAIT_TIME_IN_2H")
+# Répartition des années dans df_train
+year_counts_train = df_train['year'].value_counts().sort_index()
+# Répartition des années dans df_val
+year_counts_val = df_val['year'].value_counts().sort_index()
 
-"""
-"""
-##MODELES
-model_wr = LinearRegression()
-model_ps = LinearRegression()
-model_fc = LinearRegression()
 
-model_wr.fit(X_train_wr, Y_train_wr)
-model_ps.fit(X_train_ps, Y_train_ps)
-model_fc.fit(X_train_fc, Y_train_fc)
+##GRAPHIQUES CAMEMBERT
+fig, axes = plt.subplots(1, 2, figsize=(12, 6))
 
-Y_pred_wr = model_wr.predict(X_val_wr)
-Y_pred_ps = model_ps.predict(X_val_ps)
-Y_pred_fc = model_fc.predict(X_val_fc)
-"""
+#Graphique camembert années train
+axes[0].pie(year_counts_train, labels=year_counts_train.index, autopct='%1.1f%%')
+axes[0].set_title("Répartition des années - Train")
 
-#Rendu
-"""
-df_result = df_val_attrac_dt.copy()
-df_ypred = pd.concat(Y_pred_wr, Y_pred_ps, Y_pred_fc)
-df_ypred = df_ypred.sort_values('index')  # remet dans l'ordre original
-df_result["y_pred"] = df_ypred
-df_result["KEY"] = "Validation"
-"""
-df_val.to_csv("C:/Users/Utilisateur/Documents/MyGitDirectory/Projet-Hackathon/xval_preproc_2.csv", index=False, encoding="utf-8")
-df_train.to_csv("C:/Users/Utilisateur/Documents/MyGitDirectory/Projet-Hackathon/xtrain_preproc_2.csv", index=False, encoding="utf-8")
-#df_result.to_csv("C:/Users/Utilisateur/Documents/MyGitDirectory/Projet-Hackathon/y_linear_par_attract.csv", index=False, encoding="utf-8")
+#Graphique camembert années val
+axes[1].pie(year_counts_val, labels=year_counts_val.index, autopct='%1.1f%%')
+axes[1].set_title("Répartition des années - Validation")
+
+plt.show()
+
+
+##HISTOGRAMME JOURS SEMAINE
+dow_counts_train = df_train['day_of_week'].value_counts().sort_index()
+dow_counts_val = df_val['day_of_week'].value_counts().sort_index()
+
+#Jours
+jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+
+# Histogramme côte à côte
+x = np.arange(len(jours))  # positions des barres
+width = 0.35               # largeur des barres
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.bar(x - width/2, dow_counts_train, width, label='Train')
+ax.bar(x + width/2, dow_counts_val, width, label='Validation')
+
+# Mise en forme
+ax.set_xticks(x)
+ax.set_xticklabels(jours)
+ax.set_ylabel("Nombre d'observations")
+ax.set_title("Répartition des jours de la semaine")
+ax.legend()
+
+plt.show()
