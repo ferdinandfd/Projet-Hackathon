@@ -12,8 +12,10 @@ def load_and_preprocess_data(file_path, is_train=True, le=None):
     Charge et prétraite les données du fichier CSV
     """
     # Charger les données
-    df = pd.read_csv(file_path)
-    
+    df1 = pd.read_csv(file_path)
+    dfweather = pd.read_csv('weather_data.csv')
+
+    df = pd.merge(df1, dfweather)
     # Convertir la colonne DATE_TIME en datetime
     df['DATETIME'] = pd.to_datetime(df['DATETIME'])
     
